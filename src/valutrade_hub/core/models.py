@@ -176,6 +176,47 @@ class User:
                     f"Имя пользователя '{username}' уже занято."
                 )
 
+    @classmethod
+    def authenticate(cls, username: str, password: str) -> "User":
+        """Находит пользователя и проверяет пароль."""
+        filepath = Path(USERS_STORAGE_PATH)
+
+        if not filepath.exists():
+            raise ValueError("Неверное имя пользователя или пароль.")
+
+        with filepath.open("r", encoding="utf-8") as file:
+            content = file.read().strip()
+            users = json.loads(content) if content else []
+
+        for user_data in users:
+            if user_data["username"].casefold() != username.casefold():
+                continue
+
+            salt = user_data["salt"]
+            hashed_password = hashlib.sha256(
+                (password + salt).encode("utf-8")
+            ).hexdigest()
+
+            if not secrets.compare_digest(
+                user_data["hashed_password"],
+                hashed_password,
+            ):
+                raise ValueError("Неверный пароль")
+
+            # Восстанавливаем объект без вызова конструктора,
+            # который создаёт и сохраняет нового пользователя.
+            user = cls.__new__(cls)
+            user._user_id = user_data["user_id"]
+            user._username = user_data["username"]
+            user._salt = salt
+            user._hashed_password = user_data["hashed_password"]
+            user._registration_date = datetime.fromisoformat(
+                user_data["registration_date"]
+            )
+            return user
+
+        raise ValueError(f"Пользователь '{username}' не найден")
+
 class Wallet:
     """Кошелёк пользователя для одной конкретной валюты."""
     def __init__(self, currency_code: str, balance: float = 0) -> None:

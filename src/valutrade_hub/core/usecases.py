@@ -39,3 +39,25 @@ def register(args: list[str]) -> None:
 
     print(f"Пользователь '{user.username}' зарегистрирован (id={user.user_id}).\
  Войдите: login --username {user.username} --password ****")
+
+def login(args: list[str]) -> User:
+    """Возвращает учетную запись пользователя после авторизации."""
+    options = dict(zip(args[::2], args[1::2]))
+
+    if set(options) != {"--username", "--password"} or len(args) != 4:
+        raise ValueError(
+            "Использование: login --username <имя> --password <пароль>"
+        )
+    try:
+        user = User.authenticate(
+            username=options["--username"],
+            password=options["--password"],
+        )
+    except ValueError as error:
+        print(f"{error}")
+        return None
+
+    print(f"Вы вошли как '{user.username}'")
+    return user
+
+    
