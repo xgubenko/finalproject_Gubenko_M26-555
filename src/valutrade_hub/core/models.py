@@ -20,21 +20,25 @@ class User:
 
     def __init__(
         self,
-        user_id: int,
         username: str,
-        hashed_password: str,
-        salt: str,
-        registration_date: datetime,
+        password: str,
+        salt: str | None = None,
+        registration_date: datetime | None = None,
+        user_id: int | None = None,
     ) -> None:
         if not isinstance(username, str) or not username.strip():
             raise ValueError("Имя пользователя не может быть пустым.")
 
-        self._user_id = user_id
+        self._user_id = (
+            user_id if user_id is not None else self._get_next_user_id()
+        )
         self._username = username.strip()
-        self._hashed_password = hashed_password
-        self._salt = salt
-        self._registration_date = registration_date
+        self._salt = salt if salt is not None else secrets.token_hex(16)
+        self._registration_date = (
+            registration_date if registration_date is not None else datetime.now()
+        )
 
+        self.change_password(password)
         self._save_to_json()
 
     @property
@@ -138,6 +142,22 @@ class User:
 
         with filepath.open("w", encoding="utf-8") as file:
             json.dump(users, file, ensure_ascii=False, indent=4)
+
+    def _get_next_user_id(self) -> int:
+        """Возвращает следующий свободный ID пользователя."""
+        filepath = Path(USERS_STORAGE_PATH)
+
+        if not filepath.exists():
+            return 1
+
+        with filepath.open("r", encoding="utf-8") as file:
+            content = file.read().strip()
+            users = json.loads(content) if content else []
+
+        if not users:
+            return 1
+
+        return max(user["user_id"] for user in users) + 1
 
 class Wallet:
     """Кошелёк пользователя для одной конкретной валюты."""
