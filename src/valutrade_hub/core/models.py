@@ -4,18 +4,21 @@ from datetime import datetime
 
 
 class User:
-    """Класс User (пользователь системы)"""
+    """Класс User (пользователь системы)."""
 
     def __init__(
         self,
         user_id: int,
         username: str,
         hashed_password: str,
-        salt: str, # уникальная соль для пользователя
+        salt: str,
         registration_date: datetime,
     ) -> None:
+        if not isinstance(username, str) or not username.strip():
+            raise ValueError("Имя пользователя не может быть пустым.")
+
         self._user_id = user_id
-        self._username = username
+        self._username = username.strip()
         self._salt = salt
         self._registration_date = registration_date
         self._hashed_password = hashed_password
@@ -54,7 +57,7 @@ class User:
         return self._registration_date
 
     def get_user_info(self) -> dict:
-        """Выводит информацию о пользователе (без пароля и соли)."""
+        """Возвращает информацию о пользователе без пароля и соли."""
         return {
             "user_id": self._user_id,
             "username": self._username,
@@ -62,7 +65,12 @@ class User:
         }
 
     def change_password(self, new_password: str) -> None:
-        """Изменяет пароль пользователя, с хешированием нового пароля."""
+        """Изменяет пароль пользователя с хешированием."""
+        if not isinstance(new_password, str) or len(new_password) < 4:
+            raise ValueError(
+                "Пароль должен содержать не менее 4 символов."
+            )
+
         self._salt = secrets.token_hex(16)
         self._hashed_password = hashlib.sha256(
             (new_password + self._salt).encode("utf-8")
