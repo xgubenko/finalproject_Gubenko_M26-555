@@ -2,30 +2,27 @@ import shlex
 
 import prompt
 
-from valutrade_hub.core.usecases import print_help, register, login
+from valutrade_hub.core.usecases import print_help, register, login, show_portfolio
 
 
 def run():
     print("Добро пожаловать в Valutrade!")
     print_help()
+    user = None
 
     while True:
         user_input = prompt.string('Введите команду: ')
         args = shlex.split(user_input)
         cmd_name = args[0] if args else None
-        user = None
-
         match cmd_name:
 
             case "register":
                 register(args[1:])
             case "login": 
                 user = login(args[1:])
-            case "show-portfolio": pass
-            case "buy": 
-                if user == None:
-                    print("Требуется вход в учетную запись")
-                    continue
+            case "show-portfolio": 
+                show_portfolio(args[1:], user)
+            case "buy": pass
             case "sell": pass
             case "get-rate": pass
 

@@ -401,3 +401,32 @@ class Portfolio:
             return DEFAULT_RATES.copy()
 
         return json.loads(content)
+
+    @classmethod
+    def load(cls, user_id: int) -> "Portfolio":
+        """Загружает портфель пользователя из JSON."""
+        filepath = Path(PORTFOLIOS_STORAGE_PATH)
+
+        if not filepath.exists():
+            return cls(user_id=user_id, wallets={})
+
+        with filepath.open("r", encoding="utf-8") as file:
+            content = file.read().strip()
+            portfolios = json.loads(content) if content else []
+
+        for portfolio_data in portfolios:
+            if portfolio_data["user_id"] != user_id:
+                continue
+
+            wallets = {
+                currency_code: Wallet(
+                    currency_code=currency_code,
+                    balance=wallet_data["balance"],
+                )
+                for currency_code, wallet_data
+                in portfolio_data["wallets"].items()
+            }
+
+            return cls(user_id=user_id, wallets=wallets)
+
+        return cls(user_id=user_id, wallets={})

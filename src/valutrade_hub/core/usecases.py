@@ -60,4 +60,63 @@ def login(args: list[str]) -> User:
     print(f"Вы вошли как '{user.username}'")
     return user
 
+def show_portfolio(
+    args: list[str],
+    user: User | None,
+) -> None:
+    """Показывает кошельки и итоговую стоимость портфеля."""
+    if user is None:
+        print("Сначала выполните login")
+        return
+
+
+    base_currency = "USD"
+
+    if len(args) == 2:
+        base_currency = args[1].upper()
+
+    portfolio = Portfolio.load(user.user_id)
+
+    try:
+        # Проверяем валюту даже при отсутствии кошельков.
+        portfolio.get_total_value(base_currency)
+    except ValueError as error:
+        if base_currency not in portfolio._load_exchange_rates():
+            print(f"Неизвестная базовая валюта '{base_currency}'")
+        else:
+            print(error)
+        return
+
+    wallets = portfolio.wallets
+
+    total = 0.0
+
+    for currency_code, wallet in wallets.items():
+        try:
+            value = portfolio.get_wallet_value(
+                currency_code,
+                base_currency,
+            )
+        except ValueError as error:
+            print(f"Ошибка расчёта: {error}")
+            return
+
+        precision = 4 if currency_code == "BTC" else 2
+
+        print(
+            f"- {currency_code}: "
+            f"{wallet.balance:.{precision}f}  → "
+            f"{value:,.2f} {base_currency}"
+        )
+
+        total += value
+
+    print(f"""
+Портфель пользователя '{user.username}' (база: {base_currency}):
+- USD: 150.00  → 150.00 USD
+- BTC: 0.0500  → 2965.00 USD
+- EUR: 200.00  → 214.00 USD
+---------------------------------
+ИТОГО: 3,329.00 USD 
+""")
     
