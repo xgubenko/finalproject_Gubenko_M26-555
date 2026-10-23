@@ -1,4 +1,4 @@
-from valutrade_hub.core.models import User
+from valutrade_hub.core.models import User, Portfolio
 import shlex
 
 def print_help():
@@ -32,6 +32,7 @@ def register(args: list[str]) -> None:
             username=options["--username"],
             password=options["--password"],
         )
+        Portfolio(user.user_id)
     except ValueError as error:
         print(f"Ошибка регистрации: {error}")
         return
