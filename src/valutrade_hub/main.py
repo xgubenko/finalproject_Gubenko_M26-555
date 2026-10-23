@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
 from datetime import datetime
 
-from valutrade_hub.core.models import User
+from valutrade_hub.core.models import User, Portfolio
 
 
 def main() -> None:
     user = User(
-    user_id=2,
+    user_id=1,
     username="alice2",
     hashed_password="",
     salt="",
@@ -19,8 +19,10 @@ def main() -> None:
     # Изменяем имя — JSON обновляется автоматически
     user.username = "bob"
 
-    print(user.get_user_info())
-    print(user.verify_password("qwerty"))
+
+    portfolio = Portfolio(user_id=2)
+    portfolio.add_currency("USD")
+    portfolio.add_currency("BTC")
 
 
 if __name__ == "__main__":
