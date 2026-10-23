@@ -1,7 +1,11 @@
 import hashlib
+import json
 import secrets
 from datetime import datetime
+from pathlib import Path
 
+DATA_PATH = "data"
+USERS_STORAGE_PATH = f"{DATA_PATH}/users.json"
 
 class User:
     """Класс User (пользователь системы)."""
@@ -19,9 +23,11 @@ class User:
 
         self._user_id = user_id
         self._username = username.strip()
+        self._hashed_password = hashed_password
         self._salt = salt
         self._registration_date = registration_date
-        self._hashed_password = hashed_password
+
+        self._save_to_json()
 
     @property
     def user_id(self) -> int:
@@ -35,11 +41,12 @@ class User:
 
     @username.setter
     def username(self, value: str) -> None:
-        """Изменяет имя пользователя."""
+        """Изменяет имя пользователя и сохраняет изменения."""
         if not isinstance(value, str) or not value.strip():
             raise ValueError("Имя пользователя не может быть пустым.")
 
         self._username = value.strip()
+        self._save_to_json()
 
     @property
     def hashed_password(self) -> str:
@@ -65,19 +72,24 @@ class User:
         }
 
     def change_password(self, new_password: str) -> None:
-        """Изменяет пароль пользователя с хешированием."""
+        """Изменяет пароль и сохраняет изменения в JSON."""
         if not isinstance(new_password, str) or len(new_password) < 4:
             raise ValueError(
                 "Пароль должен содержать не менее 4 символов."
             )
 
-        self._salt = secrets.token_hex(16)
-        self._hashed_password = hashlib.sha256(
-            (new_password + self._salt).encode("utf-8")
+        salt = secrets.token_hex(16)
+        hashed_password = hashlib.sha256(
+            (new_password + salt).encode("utf-8")
         ).hexdigest()
 
+        self._salt = salt
+        self._hashed_password = hashed_password
+
+        self._save_to_json()
+
     def verify_password(self, password: str) -> bool:
-        """Проверяет введённый пароль на совпадение."""
+        """Проверяет введённый пароль."""
         if not isinstance(password, str):
             return False
 
@@ -89,3 +101,32 @@ class User:
             self._hashed_password,
             hashed_password,
         )
+
+    def _save_to_json(self) -> None:
+        """Сохраняет пользователя в JSON-файл."""
+        filepath = Path(USERS_STORAGE_PATH)
+        filepath.parent.mkdir(parents=True, exist_ok=True)
+
+        if filepath.exists():
+            with filepath.open("r", encoding="utf-8") as file:
+                users = json.load(file)
+        else:
+            users = []
+
+        user_data = {
+            "user_id": self._user_id,
+            "username": self._username,
+            "hashed_password": self._hashed_password,
+            "salt": self._salt,
+            "registration_date": self._registration_date.isoformat(),
+        }
+
+        for index, user in enumerate(users):
+            if user["user_id"] == self._user_id:
+                users[index] = user_data
+                break
+        else:
+            users.append(user_data)
+
+        with filepath.open("w", encoding="utf-8") as file:
+            json.dump(users, file, ensure_ascii=False, indent=4)
