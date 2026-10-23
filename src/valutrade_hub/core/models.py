@@ -3,17 +3,8 @@ import json
 import secrets
 from datetime import datetime
 from pathlib import Path
+from valutrade_hub.core.constants import *
 
-DATA_PATH = "data"
-USERS_STORAGE_PATH = f"{DATA_PATH}/users.json"
-PORTFOLIOS_STORAGE_PATH = f"{DATA_PATH}/portfolios.json"
-RATES_STORAGE_PATH = f"{DATA_PATH}/rates.json"
-
-DEFAULT_RATES = {
-        "USD": 1.0,
-        "EUR": 1.1,
-        "BTC": 60000.0,
-    }
 
 class User:
     """Пользователь системы."""
@@ -430,3 +421,29 @@ class Portfolio:
             return cls(user_id=user_id, wallets=wallets)
 
         return cls(user_id=user_id, wallets={})
+
+    def get_wallet_value(
+        self,
+        currency_code: str,
+        base_currency: str = "USD",
+    ) -> float:
+        """Возвращает стоимость кошелька в базовой валюте."""
+        exchange_rates = self._load_exchange_rates()
+
+        if base_currency not in exchange_rates:
+            raise ValueError(
+                f"Неизвестная базовая валюта '{base_currency}'"
+            )
+
+        if currency_code not in exchange_rates:
+            raise ValueError(
+                f"Нет курса для валюты {currency_code}."
+            )
+
+        wallet = self.get_wallet(currency_code)
+
+        return (
+            wallet.balance
+            * exchange_rates[currency_code]
+            / exchange_rates[base_currency]
+        )

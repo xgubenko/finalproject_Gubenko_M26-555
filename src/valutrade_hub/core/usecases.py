@@ -1,5 +1,8 @@
 from valutrade_hub.core.models import User, Portfolio
-import shlex
+import json
+from datetime import datetime, timedelta
+from pathlib import Path
+from valutrade_hub.core.constants import *
 
 def print_help():
     """Prints the help message for the current mode."""
@@ -117,3 +120,245 @@ def show_portfolio(
 
     print("-" * 33)
     print(f"ИТОГО: {total:,.2f} {base_currency}")
+
+
+def buy(args: list[str], user: User | None) -> None:
+    """Покупает валюту и добавляет её в портфель."""
+    if user is None:
+        print("Сначала выполните login")
+        return
+
+    if (
+        len(args) != 4
+        or args[0] != "--currency"
+        or args[2] != "--amount"
+    ):
+        print("Использование: buy --currency <валюта> --amount <сумма>")
+        return
+
+    currency_code = args[1].upper()
+
+    if (
+        len(currency_code) != 3
+        or not currency_code.isalpha()
+        or not currency_code.isascii()
+    ):
+        print("Некорректный формат валюты")
+        return
+
+    try:
+        amount = float(args[3])
+    except ValueError:
+        print("'amount' должен быть положительным числом")
+        return
+
+    portfolio = Portfolio.load(user.user_id)
+    rates = portfolio._load_exchange_rates()
+
+    if currency_code not in rates or "USD" not in rates:
+        print(f"Не удалось получить курс для {currency_code}→USD")
+        return
+
+    rate = rates[currency_code] / rates["USD"]
+    purchase_value = amount * rate
+
+    if currency_code not in portfolio.wallets:
+        portfolio.add_currency(currency_code)
+
+    wallet = portfolio.get_wallet(currency_code)
+    old_balance = wallet.balance
+
+    wallet.deposit(amount)
+    new_balance = wallet.balance
+
+    portfolio._save_to_json()
+
+    precision = 4 if currency_code == "BTC" else 2
+
+    print(
+        f"Покупка выполнена: {amount:.{precision}f} "
+        f"{currency_code} по курсу {rate:,.2f} USD/{currency_code}"
+    )
+    print("Изменения в портфеле:")
+    print(
+        f"- {currency_code}: "
+        f"было {old_balance:.{precision}f} → "
+        f"стало {new_balance:.{precision}f}"
+    )
+    print(f"Оценочная стоимость покупки: {purchase_value:,.2f} USD")
+
+import math
+
+
+def sell(args: list[str], user: User | None) -> None:
+    """Продаёт валюту из портфеля пользователя."""
+    if user is None:
+        print("Сначала выполните login")
+        return
+
+    if args and args[0] == "sell":
+        args = args[1:]
+
+    if (
+        len(args) != 4
+        or args[0] != "--currency"
+        or args[2] != "--amount"
+    ):
+        print("Использование: sell --currency <валюта> --amount <сумма>")
+        return
+
+    currency_code = args[1].upper()
+
+    if (
+        len(currency_code) != 3
+        or not currency_code.isalpha()
+        or not currency_code.isascii()
+    ):
+        print("Некорректный формат валюты")
+        return
+
+    try:
+        amount = float(args[3])
+    except ValueError:
+        print("'amount' должен быть положительным числом")
+        return
+
+    if not math.isfinite(amount) or amount <= 0:
+        print("'amount' должен быть положительным числом")
+        return
+
+    portfolio = Portfolio.load(user.user_id)
+
+    try:
+        wallet = portfolio.get_wallet(currency_code)
+    except ValueError:
+        print(
+            f"У вас нет кошелька '{currency_code}'. "
+            "Добавьте валюту: она создаётся автоматически при первой покупке."
+        )
+        return
+
+    precision = 4 if currency_code == "BTC" else 2
+
+    if wallet.balance < amount:
+        print(
+            f"Недостаточно средств: доступно "
+            f"{wallet.balance:.{precision}f} {currency_code}, "
+            f"требуется {amount:.{precision}f} {currency_code}"
+        )
+        return
+
+    rates = portfolio._load_exchange_rates()
+
+    if currency_code not in rates or "USD" not in rates:
+        print(f"Не удалось получить курс для {currency_code}→USD")
+        return
+
+    rate = rates[currency_code] / rates["USD"]
+    revenue = amount * rate
+    old_balance = wallet.balance
+
+    wallet.withdraw(amount)
+    new_balance = wallet.balance
+
+    portfolio._save_to_json()
+
+    print(
+        f"Продажа выполнена: {amount:.{precision}f} "
+        f"{currency_code} по курсу {rate:,.2f} USD/{currency_code}"
+    )
+    print("Изменения в портфеле:")
+    print(
+        f"- {currency_code}: было "
+        f"{old_balance:.{precision}f} → "
+        f"стало {new_balance:.{precision}f}"
+    )
+    print(f"Оценочная выручка: {revenue:,.2f} USD")
+
+def get_rate(args: list[str]) -> None:
+    """Показывает курс одной валюты относительно другой."""
+    if (
+        len(args) != 4
+        or args[0] != "--from"
+        or args[2] != "--to"
+    ):
+        print("Использование: get-rate --from <валюта> --to <валюта>")
+        return
+
+    from_currency = args[1].upper()
+    to_currency = args[3].upper()
+
+    for currency in (from_currency, to_currency):
+        if (
+            len(currency) != 3
+            or not currency.isalpha()
+            or not currency.isascii()
+        ):
+            print(f"Некорректный код валюты: {currency}")
+            return
+
+    filepath = Path(RATES_STORAGE_PATH)
+
+    try:
+        if not filepath.exists():
+            rates = DEFAULT_RATES.copy()
+            updated_at = datetime.now().isoformat(timespec="seconds")
+            is_fresh = False
+        else:
+            with filepath.open("r", encoding="utf-8") as file:
+                data = json.load(file)
+
+            rates = data.get("rates", data)
+            updated_at = data.get("updated_at")
+
+            if updated_at:
+                update_time = datetime.fromisoformat(updated_at)
+                is_fresh = (
+                    datetime.now() - update_time < timedelta(minutes=5)
+                )
+            else:
+                is_fresh = False
+
+        if not is_fresh:
+            rates = DEFAULT_RATES.copy()
+            updated_at = datetime.now().isoformat(timespec="seconds")
+
+            filepath.parent.mkdir(parents=True, exist_ok=True)
+            with filepath.open("w", encoding="utf-8") as file:
+                json.dump(
+                    {
+                        "rates": rates,
+                        "updated_at": updated_at,
+                    },
+                    file,
+                    ensure_ascii=False,
+                    indent=4,
+                )
+
+        if from_currency not in rates or to_currency not in rates:
+            print(
+                f"Курс {from_currency}→{to_currency} недоступен. "
+                "Повторите попытку позже."
+            )
+            return
+
+        rate = rates[to_currency] / rates[from_currency]
+        reverse_rate = rates[from_currency] / rates[to_currency]
+
+        print(
+            f"Курс {from_currency}→{to_currency}: "
+            f"{rate:.2f} "
+            f"(обновлено: "
+            f"{datetime.fromisoformat(updated_at):%Y-%m-%d %H:%M:%S})"
+        )
+        print(
+            f"Обратный курс {to_currency}→{from_currency}: "
+            f"{reverse_rate:.2f}"
+        )
+
+    except (OSError, ValueError, TypeError, json.JSONDecodeError) as error:
+        print(f"Ошибка получения курса: {error}")
+        print(
+            f"Курс {from_currency}→{to_currency} недоступен. "
+            "Повторите попытку позже."
+        )

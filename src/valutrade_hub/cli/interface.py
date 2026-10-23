@@ -2,7 +2,7 @@ import shlex
 
 import prompt
 
-from valutrade_hub.core.usecases import print_help, register, login, show_portfolio
+from valutrade_hub.core.usecases import print_help, register, login, show_portfolio, buy, sell, get_rate
 
 
 def run():
@@ -22,9 +22,12 @@ def run():
                 user = login(args[1:])
             case "show-portfolio": 
                 show_portfolio(args[1:], user)
-            case "buy": pass
-            case "sell": pass
-            case "get-rate": pass
+            case "buy":
+                buy(args[1:], user)
+            case "sell": 
+                sell(args[1:], user)
+            case "get-rate": 
+                get_rate(args[1:])
 
             case "help":
                 print_help()
