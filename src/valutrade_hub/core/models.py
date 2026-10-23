@@ -6,9 +6,60 @@ from pathlib import Path
 
 DATA_PATH = "data"
 USERS_STORAGE_PATH = f"{DATA_PATH}/users.json"
+PORTFOLIOS_STORAGE_PATH = f"{DATA_PATH}/portfolios.json"
+RATES_STORAGE_PATH = f"{DATA_PATH}/rates.json"
+
+class Wallet:
+    """Кошелёк пользователя для одной конкретной валюты."""
+    def __init__(self, currency_code: str, balance: float = 0) -> None:
+        if not isinstance(currency_code, str) or not currency_code.strip():
+            raise ValueError("Код валюты не может быть пустым.")
+        if balance < 0:
+            raise ValueError("Баланс не может быть отрицательным.")
+        self._currency_code = currency_code
+        self._balance = balance
+
+    @property
+    def balance(self) -> float:
+        """Возвращает баланс кошелька."""
+        return self._balance
+
+    @balance.setter
+    def balance(self, value: float) -> None:
+        if not isinstance(value, (int, float)):
+            raise ValueError("Баланс должен быть числом.")
+        if value < 0:
+            raise ValueError("Баланс не может быть отрицательным.")
+        self._balance = float(value)
+
+    def deposit(self, amount: float) -> None:
+        """Пополнение баланса."""
+        self._validate_amount(amount)
+        self._balance += amount
+
+    def withdraw(self, amount: float) -> None:
+        """Снятие с баланса."""
+        self._validate_amount(amount)
+        if amount > self._balance:
+            raise ValueError("Нельзя снять больше чем есть на балансе.")
+        self._balance -= amount
+
+    def get_balance_info(self) -> dict:
+        """Получение информации о балансе."""
+        return {
+            "currency_code": self._currency_code,
+            "balance": self._balance,
+        }
+
+    @staticmethod
+    def _validate_amount(amount: float) -> None:
+        """Проверяет сумму операции."""
+        if isinstance(amount, bool) or not isinstance(amount, (int, float)):
+            raise ValueError("Сумма должна быть числом.")
+        
 
 class User:
-    """Класс User (пользователь системы)."""
+    """Пользователь системы."""
 
     def __init__(
         self,
@@ -130,3 +181,4 @@ class User:
 
         with filepath.open("w", encoding="utf-8") as file:
             json.dump(users, file, ensure_ascii=False, indent=4)
+

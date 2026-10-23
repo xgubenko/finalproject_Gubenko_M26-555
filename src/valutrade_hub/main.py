@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
-from valutrade_hub.core.models import User
 from datetime import datetime
+
+from valutrade_hub.core.models import User
 
 
 def main() -> None:
