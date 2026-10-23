@@ -2,7 +2,15 @@ import shlex
 
 import prompt
 
-from valutrade_hub.core.usecases import print_help, register, login, show_portfolio, buy, sell, get_rate
+from valutrade_hub.core.usecases import (
+    buy,
+    get_rate,
+    login,
+    print_help,
+    register,
+    sell,
+    show_portfolio,
+)
 
 
 def run():

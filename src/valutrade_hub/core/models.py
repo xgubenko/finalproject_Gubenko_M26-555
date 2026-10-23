@@ -3,7 +3,13 @@ import json
 import secrets
 from datetime import datetime
 from pathlib import Path
-from valutrade_hub.core.constants import *
+
+from valutrade_hub.core.constants import (
+    DEFAULT_RATES,
+    PORTFOLIOS_STORAGE_PATH,
+    RATES_STORAGE_PATH,
+    USERS_STORAGE_PATH,
+)
 
 
 class User:

@@ -1,8 +1,10 @@
-from valutrade_hub.core.models import User, Portfolio
 import json
 from datetime import datetime, timedelta
 from pathlib import Path
-from valutrade_hub.core.constants import *
+
+from valutrade_hub.core.constants import DEFAULT_RATES, RATES_STORAGE_PATH
+from valutrade_hub.core.models import Portfolio, User
+
 
 def print_help():
     """Prints the help message for the current mode."""
@@ -187,9 +189,6 @@ def buy(args: list[str], user: User | None) -> None:
     )
     print(f"Оценочная стоимость покупки: {purchase_value:,.2f} USD")
 
-import math
-
-
 def sell(args: list[str], user: User | None) -> None:
     """Продаёт валюту из портфеля пользователя."""
     if user is None:
@@ -220,10 +219,6 @@ def sell(args: list[str], user: User | None) -> None:
     try:
         amount = float(args[3])
     except ValueError:
-        print("'amount' должен быть положительным числом")
-        return
-
-    if not math.isfinite(amount) or amount <= 0:
         print("'amount' должен быть положительным числом")
         return
 
