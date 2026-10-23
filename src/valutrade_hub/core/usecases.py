@@ -101,7 +101,13 @@ def show_portfolio(
             print(f"Ошибка расчёта: {error}")
             return
 
+        total += value
+
+    print(f"Портфель пользователя '{user.username}' (база: {base_currency}):")
+
+    for currency_code, wallet in wallets.items():
         precision = 4 if currency_code == "BTC" else 2
+        value = portfolio.get_wallet_value(currency_code, base_currency)
 
         print(
             f"- {currency_code}: "
@@ -109,14 +115,5 @@ def show_portfolio(
             f"{value:,.2f} {base_currency}"
         )
 
-        total += value
-
-    print(f"""
-Портфель пользователя '{user.username}' (база: {base_currency}):
-- USD: 150.00  → 150.00 USD
-- BTC: 0.0500  → 2965.00 USD
-- EUR: 200.00  → 214.00 USD
----------------------------------
-ИТОГО: 3,329.00 USD 
-""")
-    
+    print("-" * 33)
+    print(f"ИТОГО: {total:,.2f} {base_currency}")
