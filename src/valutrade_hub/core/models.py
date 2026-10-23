@@ -28,7 +28,7 @@ class User:
     ) -> None:
         if not isinstance(username, str) or not username.strip():
             raise ValueError("Имя пользователя не может быть пустым.")
-
+        self._check_username_unique(username)
         self._user_id = (
             user_id if user_id is not None else self._get_next_user_id()
         )
@@ -158,6 +158,23 @@ class User:
             return 1
 
         return max(user["user_id"] for user in users) + 1
+
+    def _check_username_unique(self, username: str) -> None:
+        """Проверяет, что имя пользователя ещё не занято."""
+        filepath = Path(USERS_STORAGE_PATH)
+
+        if not filepath.exists():
+            return
+
+        with filepath.open("r", encoding="utf-8") as file:
+            content = file.read().strip()
+            users = json.loads(content) if content else []
+
+        for user in users:
+            if user["username"].casefold() == username.casefold():
+                raise ValueError(
+                    f"Имя пользователя '{username}' уже занято."
+                )
 
 class Wallet:
     """Кошелёк пользователя для одной конкретной валюты."""

@@ -18,7 +18,7 @@ def run():
         match cmd_name:
 
             case "register":
-                register(args)
+                register(args[1:])
             case "login": pass
             case "show-portfolio": pass
             case "buy": pass
