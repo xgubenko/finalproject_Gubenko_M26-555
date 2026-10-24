@@ -1,7 +1,12 @@
 import shlex
 
 import prompt
-from valutrade_hub.core.exceptions import InsufficientFundsError, CurrencyNotFoundError, ApiRequestError
+
+from valutrade_hub.core.exceptions import (
+    ApiRequestError,
+    CurrencyNotFoundError,
+    InsufficientFundsError,
+)
 from valutrade_hub.core.usecases import (
     buy,
     get_rate,
@@ -46,8 +51,8 @@ def run():
                     break
         except InsufficientFundsError as error:
             print(error)
-        except CurrencyNotFoundError as error:
+        except CurrencyNotFoundError:
             print("Доступны следующие валюты: ")
             get_codes(user)
-        except ApiRequestError as error:
+        except ApiRequestError:
             print("Проблемы с сетью, проверьте соединение и повторите позже")

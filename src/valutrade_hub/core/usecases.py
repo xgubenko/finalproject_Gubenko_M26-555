@@ -1,11 +1,18 @@
 import json
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
-from valutrade_hub.core.constants import DEFAULT_RATES, RATES_STORAGE_PATH
-from valutrade_hub.core.models import Portfolio, User
 from valutrade_hub.core.exceptions import CurrencyNotFoundError
+from valutrade_hub.core.models import Portfolio, User
 from valutrade_hub.decorators import log_action
+from valutrade_hub.parser_service.api_clients import (
+    CoinGeckoClient,
+    ExchangeRateApiClient,
+)
+from valutrade_hub.parser_service.config import ParserConfig
+from valutrade_hub.parser_service.storage import RatesStorage
+from valutrade_hub.parser_service.updater import RatesUpdater
+
 
 def print_help():
     """Prints the help message for the current mode."""
@@ -271,7 +278,8 @@ def sell(args: list[str], user: User | None) -> None:
     print(f"Оценочная выручка: {revenue:,.2f} USD")
 
 def get_rate(args: list[str]) -> None:
-    """Показывает курс одной валюты относительно другой."""
+    """Показывает курс валют и обновляет устаревший кэш."""
+
     if (
         len(args) != 4
         or args[0] != "--from"
@@ -292,43 +300,104 @@ def get_rate(args: list[str]) -> None:
             print(f"Некорректный код валюты: {currency}")
             return
 
-    filepath = Path(RATES_STORAGE_PATH)
+    config = ParserConfig()
+    storage = RatesStorage(config)
+    filepath = Path(config.RATES_FILE_PATH)
+
+    def parse_timestamp(value: str) -> datetime:
+        """Преобразует ISO-время в UTC."""
+        timestamp = datetime.fromisoformat(value.replace("Z", "+00:00"))
+
+        if timestamp.tzinfo is None:
+            timestamp = timestamp.replace(tzinfo=timezone.utc)
+
+        return timestamp.astimezone(timezone.utc)
+
+    def load_cache() -> tuple[dict, bool]:
+        """Возвращает курсы и признак актуальности нужных валют."""
+        if not filepath.exists():
+            return {}, False
+
+        with filepath.open("r", encoding="utf-8") as file:
+            data = json.load(file)
+
+        now = datetime.now(timezone.utc)
+
+        # Новый формат Parser Service: pairs -> EUR_USD -> rate, updated_at
+        if isinstance(data.get("pairs"), dict):
+            pairs = data["pairs"]
+            rates = {"USD": 1.0}
+            fresh = True
+
+            for currency in (from_currency, to_currency):
+                if currency == "USD":
+                    continue
+
+                pair = pairs.get(f"{currency}_USD")
+
+                if not isinstance(pair, dict):
+                    fresh = False
+                    continue
+
+                rate = pair.get("rate")
+                updated_at = pair.get("updated_at")
+
+                if (
+                    not isinstance(rate, (int, float))
+                    or isinstance(rate, bool)
+                    or rate <= 0
+                    or not isinstance(updated_at, str)
+                ):
+                    fresh = False
+                    continue
+
+                rates[currency] = float(rate)
+
+                try:
+                    if now - parse_timestamp(updated_at) >= timedelta(minutes=5):
+                        fresh = False
+                except ValueError:
+                    fresh = False
+
+            return rates, fresh
+
+        # Старый формат: rates + единое updated_at
+        rates = data.get("rates", data)
+        updated_at = data.get("updated_at")
+
+        if not isinstance(rates, dict) or not isinstance(updated_at, str):
+            return {}, False
+
+        try:
+            fresh = (
+                now - parse_timestamp(updated_at) < timedelta(minutes=5)
+            )
+        except ValueError:
+            fresh = False
+
+        return rates, fresh
 
     try:
-        if not filepath.exists():
-            rates = DEFAULT_RATES.copy()
-            updated_at = datetime.now().isoformat(timespec="seconds")
-            is_fresh = False
-        else:
-            with filepath.open("r", encoding="utf-8") as file:
-                data = json.load(file)
-
-            rates = data.get("rates", data)
-            updated_at = data.get("updated_at")
-
-            if updated_at:
-                update_time = datetime.fromisoformat(updated_at)
-                is_fresh = (
-                    datetime.now() - update_time < timedelta(minutes=5)
-                )
-            else:
-                is_fresh = False
+        rates, is_fresh = load_cache()
 
         if not is_fresh:
-            rates = DEFAULT_RATES.copy()
-            updated_at = datetime.now().isoformat(timespec="seconds")
+            print("Кэш курсов устарел. Обновляем...")
 
-            filepath.parent.mkdir(parents=True, exist_ok=True)
-            with filepath.open("w", encoding="utf-8") as file:
-                json.dump(
-                    {
-                        "rates": rates,
-                        "updated_at": updated_at,
-                    },
-                    file,
-                    ensure_ascii=False,
-                    indent=4,
-                )
+            updater = RatesUpdater(
+                clients=[
+                    CoinGeckoClient(config),
+                    ExchangeRateApiClient(config),
+                ],
+                storage=storage,
+            )
+
+            try:
+                updater.run_update()
+            except Exception as error:
+                print(f"Не удалось обновить курсы: {error}")
+
+            # Перечитываем кэш, даже если обновление завершилось ошибкой.
+            rates, _ = load_cache()
 
         if from_currency not in rates or to_currency not in rates:
             print(
@@ -337,23 +406,38 @@ def get_rate(args: list[str]) -> None:
             )
             return
 
-        rate = rates[to_currency] / rates[from_currency]
-        reverse_rate = rates[from_currency] / rates[to_currency]
+        # В новом формате значения — стоимость валюты в USD.
+        # В старом формате rates содержит количество валюты за 1 USD.
+        with filepath.open("r", encoding="utf-8") as file:
+            data = json.load(file)
+
+        if isinstance(data.get("pairs"), dict):
+            rate = rates[from_currency] / rates[to_currency]
+            reverse_rate = 1 / rate
+            timestamps = [
+                data["pairs"][f"{currency}_USD"]["updated_at"]
+                for currency in (from_currency, to_currency)
+                if currency != "USD"
+                and isinstance(
+                    data["pairs"].get(f"{currency}_USD"), dict
+                )
+            ]
+            updated_at = min(timestamps) if timestamps else data.get(
+                "last_refresh", "неизвестно"
+            )
+        else:
+            rate = rates[to_currency] / rates[from_currency]
+            reverse_rate = 1 / rate
+            updated_at = data.get("updated_at", "неизвестно")
 
         print(
-            f"Курс {from_currency}→{to_currency}: "
-            f"{rate:.2f} "
-            f"(обновлено: "
-            f"{datetime.fromisoformat(updated_at):%Y-%m-%d %H:%M:%S})"
+            f"Курс {from_currency}→{to_currency}: {rate:.6f} "
+            f"(обновлено: {updated_at})"
         )
         print(
             f"Обратный курс {to_currency}→{from_currency}: "
-            f"{reverse_rate:.2f}"
+            f"{reverse_rate:.6f}"
         )
 
     except (OSError, ValueError, TypeError, json.JSONDecodeError) as error:
         print(f"Ошибка получения курса: {error}")
-        print(
-            f"Курс {from_currency}→{to_currency} недоступен. "
-            "Повторите попытку позже."
-        )

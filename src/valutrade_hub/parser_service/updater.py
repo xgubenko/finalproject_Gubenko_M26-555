@@ -2,10 +2,9 @@
 import logging
 from datetime import datetime, timezone
 
-from valutatrade_hub.core.exceptions import ApiRequestError
-from valutatrade_hub.parser_service.api_clients import BaseApiClient
-from valutatrade_hub.parser_service.storage import RatesStorage
-
+from valutrade_hub.core.exceptions import ApiRequestError
+from valutrade_hub.parser_service.api_clients import BaseApiClient
+from valutrade_hub.parser_service.storage import RatesStorage
 
 logger = logging.getLogger(__name__)
 

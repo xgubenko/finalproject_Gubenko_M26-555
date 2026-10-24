@@ -7,7 +7,6 @@ from typing import Any
 
 from valutrade_hub.parser_service.config import ParserConfig
 
-
 logger = logging.getLogger(__name__)
 
 
