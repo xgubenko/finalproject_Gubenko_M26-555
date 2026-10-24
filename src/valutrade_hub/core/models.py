@@ -397,7 +397,7 @@ class Portfolio:
         if not content:
             return DEFAULT_RATES.copy()
 
-        return json.loads(content).get("rates")
+        return json.loads(content)
 
     @classmethod
     def load(cls, user_id: int) -> "Portfolio":

@@ -2,6 +2,7 @@ import json
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
+import math
 from valutrade_hub.core.exceptions import CurrencyNotFoundError
 from valutrade_hub.core.models import Portfolio, User
 from valutrade_hub.decorators import log_action
@@ -162,13 +163,39 @@ def buy(args: list[str], user: User | None) -> None:
         print("'amount' должен быть положительным числом")
         return
 
-    portfolio = Portfolio.load(user.user_id)
-    rates = portfolio._load_exchange_rates()
-    if currency_code not in rates or "USD" not in rates:
-        print(f"Не удалось получить курс для {currency_code}→USD")
+    if not math.isfinite(amount) or amount <= 0:
+        print("'amount' должен быть положительным числом")
         return
 
-    rate = rates[currency_code] / rates["USD"]
+    portfolio = Portfolio.load(user.user_id)
+    rates = portfolio._load_exchange_rates()
+
+    if not isinstance(rates, dict):
+        print("Не удалось загрузить курсы валют")
+        return
+
+    # Поддержка формата {"rates": {...}}
+    if "rates" in rates and isinstance(rates["rates"], dict):
+        rates = rates["rates"]
+
+    # Для USD курс к USD всегда равен 1
+    if currency_code == "USD":
+        rate = 1.0
+    else:
+        if currency_code not in rates or "USD" not in rates:
+            print(f"Не удалось получить курс для {currency_code}→USD")
+            return
+
+        try:
+            rate = float(rates[currency_code]) / float(rates["USD"])
+        except (TypeError, ValueError, ZeroDivisionError):
+            print(f"Некорректные данные курса для {currency_code}→USD")
+            return
+
+        if not math.isfinite(rate) or rate <= 0:
+            print(f"Некорректные данные курса для {currency_code}→USD")
+            return
+
     purchase_value = amount * rate
 
     if currency_code not in portfolio.wallets:
@@ -196,6 +223,7 @@ def buy(args: list[str], user: User | None) -> None:
     )
     print(f"Оценочная стоимость покупки: {purchase_value:,.2f} USD")
 
+@log_action("SELL", True)
 def sell(args: list[str], user: User | None) -> None:
     """Продаёт валюту из портфеля пользователя."""
     if user is None:
@@ -229,6 +257,10 @@ def sell(args: list[str], user: User | None) -> None:
         print("'amount' должен быть положительным числом")
         return
 
+    if not math.isfinite(amount) or amount <= 0:
+        print("'amount' должен быть положительным числом")
+        return
+
     portfolio = Portfolio.load(user.user_id)
 
     try:
@@ -252,11 +284,32 @@ def sell(args: list[str], user: User | None) -> None:
 
     rates = portfolio._load_exchange_rates()
 
-    if currency_code not in rates or "USD" not in rates:
-        print(f"Не удалось получить курс для {currency_code}→USD")
+    if not isinstance(rates, dict):
+        print("Не удалось загрузить курсы валют")
         return
 
-    rate = rates[currency_code] / rates["USD"]
+    # Поддержка формата {"rates": {...}}
+    if "rates" in rates and isinstance(rates["rates"], dict):
+        rates = rates["rates"]
+
+    # USD → USD: курс всегда равен 1
+    if currency_code == "USD":
+        rate = 1.0
+    else:
+        if currency_code not in rates or "USD" not in rates:
+            print(f"Не удалось получить курс для {currency_code}→USD")
+            return
+
+        try:
+            rate = float(rates[currency_code]) / float(rates["USD"])
+        except (TypeError, ValueError, ZeroDivisionError):
+            print(f"Некорректные данные курса для {currency_code}→USD")
+            return
+
+        if not math.isfinite(rate) or rate <= 0:
+            print(f"Некорректные данные курса для {currency_code}→USD")
+            return
+
     revenue = amount * rate
     old_balance = wallet.balance
 
@@ -276,6 +329,7 @@ def sell(args: list[str], user: User | None) -> None:
         f"стало {new_balance:.{precision}f}"
     )
     print(f"Оценочная выручка: {revenue:,.2f} USD")
+
 
 def get_rate(args: list[str]) -> None:
     """Показывает курс валют и обновляет устаревший кэш."""
