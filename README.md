@@ -57,4 +57,11 @@ help
 ```text
 exit
 ```
-## asciinema
+## play asciinema demo
+```bash
+asciinema play demo.cast
+```
+```text
+```text
+https://asciinema.org/a/ioP4AHMzDiELd3Et
+```
