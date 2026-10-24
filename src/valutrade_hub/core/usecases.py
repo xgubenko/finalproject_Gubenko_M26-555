@@ -4,7 +4,7 @@ from pathlib import Path
 
 from valutrade_hub.core.constants import DEFAULT_RATES, RATES_STORAGE_PATH
 from valutrade_hub.core.models import Portfolio, User
-
+from valutrade_hub.core.exceptions import CurrencyNotFoundError
 
 def print_help():
     """Prints the help message for the current mode."""
@@ -87,7 +87,7 @@ def show_portfolio(
         portfolio.get_total_value(base_currency)
     except ValueError as error:
         if base_currency not in portfolio._load_exchange_rates():
-            print(f"Неизвестная базовая валюта '{base_currency}'")
+            raise CurrencyNotFoundError(base_currency)
         else:
             print(error)
         return
@@ -156,7 +156,9 @@ def buy(args: list[str], user: User | None) -> None:
 
     portfolio = Portfolio.load(user.user_id)
     rates = portfolio._load_exchange_rates()
-
+    print(currency_code)
+    print(rates)
+    print(currency_code in rates)
     if currency_code not in rates or "USD" not in rates:
         print(f"Не удалось получить курс для {currency_code}→USD")
         return
