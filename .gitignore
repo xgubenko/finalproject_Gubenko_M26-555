@@ -1,7 +1,6 @@
 .venv
 .ruff_cache
 dist/
-data/
 **/__pycache__/
 *.egg-info
 logs/
